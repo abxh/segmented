@@ -174,18 +174,22 @@ def select_u64 (b: u64) (k: i32) : i32 =
 
 -- | Expansion function with an additional predicate function ``pred`` that takes
 -- the segment source element and segment index to pre-filter them before obtaining
--- the corresponding target element with ``get`` with them.
+-- the corresponding target element with ``get``.
 --
 -- The predicate can be defined in terms of the output element and wrapped as
 -- follows to be passed to ``expand_filter``:
 -- > pred: b -> bool
 -- > let pred' (x: a) (i: i64): bool = pred (get x i)
--- Note, then ``get`` is called exactly twice for every target element produced
--- that fulfill the predicate.
+-- Note, then ``get`` is called twice for every target element produced that fulfill
+-- the predicate, and once on the target elements that don't.
 --
 -- This can be used to replace use cases where the source element is transformed to
 -- the form #some value | #none, by pre-filtering the #none cases and just outputting
--- the value, thereby avoiding wasting memory on values that would otherwise be discarded.
+-- the value, thereby avoid wasting memory on values that would otherwise be discarded.
+--
+-- This implementation avoids explicitly performing a expensive filter by recording and
+-- searching on 64-bit bitmasks with fast popc/ctz, after distributing segments into
+-- 64-sized chunks.
 def expand_filter 'a 'b
                   (sz: a -> i64)
                   (get: a -> i64 -> b)
