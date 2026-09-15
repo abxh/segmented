@@ -25,7 +25,7 @@ def segmented_reduce [n] 't
                      (op: t -> t -> t)
                      (ne: t)
                      (flags: [n]bool)
-                     (as: [n]t) =
+                     (as: [n]t): *[]t =
   segmented_scan op ne flags as
   |> zip (rotate 1 flags)
   |> filter (.0)
@@ -35,7 +35,7 @@ def segmented_reduce [n] 't
 -- an array with each index (starting from 0) repeated according to
 -- the repetition array. As an example, replicated_iota [2,3,1]
 -- returns the array [0,0,1,1,1,2].
-def replicated_iota [n] (reps: [n]i64) : []i64 =
+def replicated_iota [n] (reps: [n]i64) : *[]i64 =
   let offsets =
     map2 (-) (scan (+) 0 reps) reps
     |> map2 (\r o -> if r == 0 then -1 else o) reps
@@ -179,7 +179,7 @@ def expand_filter 'a 'b
                      (sz: a -> i64)
                      (get: a -> i64 -> b)
                      (pred: a -> i64 -> bool)
-                     (arr: []a) : []b =
+                     (arr: []a) : *[]b =
   let num_bits = i64.i32 u64.num_bits
   let szs = map sz arr
   let arr_szs = 
@@ -189,13 +189,14 @@ def expand_filter 'a 'b
                 let o = num_bits * i
                 let n = i64.min s (s - o)
                 in (xi, o, n))
-  let f (xi, o, s) =
+  let f (xi, o, n) =
     let mask =
       loop mask = 0
-      for i < i64.min num_bits s do
+      for i < i64.min num_bits n do
         u64.set_bit (i32.i64 i) mask (i32.bool <| pred arr[xi] (o + i))
     in (xi, o, mask)
   let get' (xi, o, mask) j = 
     let i = i64.i32 <| select_u64 mask (i32.i64 j)
     in get arr[xi] (o + i)
-  in map f arr_szs |> expand (\(_, _, mask) -> i64.i32 <| u64.popc mask) get'
+  let xs = map f arr_szs
+  in expand (\(_, _, mask) -> i64.i32 <| u64.popc mask) get' xs
