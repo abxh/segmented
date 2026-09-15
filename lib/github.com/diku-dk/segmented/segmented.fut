@@ -187,12 +187,12 @@ def expand_filter 'a 'b
     |> expand (\(_, s) -> (s + num_bits - 1) / num_bits)
               (\(xi, s) i -> 
                 let o = num_bits * i
-                let n = i64.min s (s - o)
+                let n = i64.min num_bits (s - o)
                 in (xi, o, n))
   let f (xi, o, n) =
     let mask =
       loop mask = 0
-      for i < i64.min num_bits n do
+      for i < n do
         u64.set_bit (i32.i64 i) mask (i32.bool <| pred arr[xi] (o + i))
     in (xi, o, mask)
   let get' (xi, o, mask) j = 
