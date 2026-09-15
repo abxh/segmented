@@ -25,7 +25,7 @@ def segmented_reduce [n] 't
                      (op: t -> t -> t)
                      (ne: t)
                      (flags: [n]bool)
-                     (as: [n]t): *[]t =
+                     (as: [n]t) : *[]t =
   segmented_scan op ne flags as
   |> zip (rotate 1 flags)
   |> filter (.0)
@@ -114,6 +114,7 @@ def expand_outer_reduce 'a 'b [n]
   in expand_reduce sz' get' op ne arr :> [n]b
 
 local
+-- | Helper function to find the position of the k'th set bit in an u8
 #[inline]
 def select_u8 (b: u8) (k: i32) : i32 =
   let f b = b & (b - 1)
@@ -139,6 +140,7 @@ def select_u8 (b: u8) (k: i32) : i32 =
   in u8.ctz w
 
 local
+-- | Helper function to find the position of the k'th set bit in an u16
 #[inline]
 def select_u16 (b: u16) (k: i32) : i32 =
   let lower = u8.u16 b
@@ -149,6 +151,7 @@ def select_u16 (b: u16) (k: i32) : i32 =
      else select_u8 upper (k - low_count) + 8
 
 local
+-- | Helper function to find the position of the k'th set bit in an u32
 #[inline]
 def select_u32 (b: u32) (k: i32) : i32 =
   let lower = u16.u32 b
@@ -159,6 +162,7 @@ def select_u32 (b: u32) (k: i32) : i32 =
      else select_u16 upper (k - low_count) + 16
 
 local
+-- | Helper function to find the position of the k'th set bit in an u64
 #[inline]
 def select_u64 (b: u64) (k: i32) : i32 =
   let lower = u32.u64 b
@@ -168,35 +172,42 @@ def select_u64 (b: u64) (k: i32) : i32 =
      then select_u32 lower k
      else select_u32 upper (k - low_count) + 32
 
--- | expand-filter implementation that semantically does expansion
--- followed by a per-element filter based on a predicate that
--- recieves the segment source element and element index.
+-- | Expansion function with an additional predicate function ``pred`` that takes
+-- the segment source element and segment index to pre-filter them before obtaining
+-- the corresponding target element with ``get`` with them.
 --
--- This implementation avoids explicitly performing a expensive filter
--- by recording and searching on 64-bit bitmasks with fast popc/ctz,
--- after dividing segments into 64-sized chunks, making it efficient.
+-- The predicate can be defined in terms of the output element and wrapped as
+-- follows to be passed to ``expand_filter``:
+-- > pred: b -> bool
+-- > let pred' (x: a) (i: i64): bool = pred (get x i)
+-- Note, then ``get`` is called exactly twice for every target element produced
+-- that fulfill the predicate.
+--
+-- This can be used to replace use cases where the source element is transformed to
+-- the form #some value | #none, by pre-filtering the #none cases and just outputting
+-- the value, thereby avoiding wasting memory on values that would otherwise be discarded.
 def expand_filter 'a 'b
-                     (sz: a -> i64)
-                     (get: a -> i64 -> b)
-                     (pred: a -> i64 -> bool)
-                     (arr: []a) : *[]b =
+                  (sz: a -> i64)
+                  (get: a -> i64 -> b)
+                  (pred: a -> i64 -> bool)
+                  (arr: []a) : *[]b =
   let num_bits = i64.i32 u64.num_bits
   let szs = map sz arr
-  let arr_szs = 
+  let arr_szs =
     zip (indices arr) szs
     |> expand (\(_, s) -> (s + num_bits - 1) / num_bits)
-              (\(xi, s) i -> 
-                let o = num_bits * i
-                let n = i64.min num_bits (s - o)
-                in (xi, o, n))
+              (\(xi, s) i ->
+                 let o = num_bits * i
+                 let n = i64.min num_bits (s - o)
+                 in (xi, o, n))
   let f (xi, o, n) =
     let mask =
       loop mask = 0
       for i < n do
         u64.set_bit (i32.i64 i) mask (i32.bool <| pred arr[xi] (o + i))
     in (xi, o, mask)
-  let get' (xi, o, mask) j = 
+  let get' (xi, o, mask) j =
     let i = i64.i32 <| select_u64 mask (i32.i64 j)
     in get arr[xi] (o + i)
-  let xs = map f arr_szs
-  in expand (\(_, _, mask) -> i64.i32 <| u64.popc mask) get' xs
+  let arr_szs' = map f arr_szs
+  in expand (\(_, _, mask) -> i64.i32 <| u64.popc mask) get' arr_szs'
