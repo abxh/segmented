@@ -174,18 +174,12 @@ def select_u64 (b: u64) (k: i32) : i32 =
 
 -- | Expansion function with an additional predicate function ``pred`` that takes
 -- the segment source element and segment index to pre-filter them before obtaining
--- the corresponding target element with ``get`` with them.
---
--- The predicate can be defined in terms of the output element and wrapped as
--- follows to be passed to ``expand_filter``:
--- > pred: b -> bool
--- > let pred' (x: a) (i: i64): bool = pred (get x i)
--- Note, then ``get`` is called exactly twice for every target element produced
--- that fulfill the predicate.
+-- the corresponding target element with ``get``.
 --
 -- This can be used to replace use cases where the source element is transformed to
--- the form #some value | #none, by pre-filtering the #none cases and just outputting
--- the value, thereby avoiding wasting memory on values that would otherwise be discarded.
+-- the form #some value | #none with ``get``, by pre-filtering the #none cases with
+-- ``pred`` and just outputting the value with ``get`` instead, thereby avoid wasting
+-- memory on values that would otherwise be discarded.
 def expand_filter 'a 'b
                   (sz: a -> i64)
                   (get: a -> i64 -> b)
@@ -211,3 +205,16 @@ def expand_filter 'a 'b
     in get arr[xi] (o + i)
   let arr_szs' = map f arr_szs
   in expand (\(_, _, mask) -> i64.i32 <| u64.popc mask) get' arr_szs'
+
+-- | Expansion function with an additional predicate function ``pred`` that takes
+-- the target element to filter. This calls ``get`` twice for every target element
+-- produced that fulfill the predicate, and once on the target elements that don't.
+-- 
+-- Can be more efficient than a naive expand-filter-target when ``get`` is cheap.
+def expand_filter_target 'a 'b
+                         (sz: a -> i64)
+                         (get: a -> i64 -> b)
+                         (pred: b -> bool)
+                         (arr: []a) : *[]b =
+  let pred' x i = pred (get x i)
+  in expand_filter sz get pred' arr
