@@ -94,9 +94,10 @@ def expand_reduce 'a 'b
   let szs = map sz arr
   let idxs = replicated_iota szs
   let flags = map2 (!=) idxs (rotate (-1) idxs)
-  let iotas = segmented_iota flags
+  let flags' = if length flags > 0 then flags with [0] = true else flags
+  let iotas = segmented_iota flags'
   let vs = map2 (\i j -> get arr[i] j) idxs iotas
-  in segmented_reduce op ne flags vs
+  in segmented_reduce op ne flags' vs
 
 -- | Expansion followed by an ''outer segmented reduce'' that ensures
 -- that each element in the result array corresponds to expanding and
