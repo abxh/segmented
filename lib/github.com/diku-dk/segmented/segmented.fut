@@ -25,7 +25,7 @@ def segmented_reduce [n] 't
                      (op: t -> t -> t)
                      (ne: t)
                      (flags: [n]bool)
-                     (as: [n]t) =
+                     (as: [n]t) : *[]t =
   segmented_scan op ne flags as
   |> zip (rotate 1 flags)
   |> filter (.0)
@@ -35,7 +35,7 @@ def segmented_reduce [n] 't
 -- an array with each index (starting from 0) repeated according to
 -- the repetition array. As an example, replicated_iota [2,3,1]
 -- returns the array [0,0,1,1,1,2].
-def replicated_iota [n] (reps: [n]i64) : []i64 =
+def replicated_iota [n] (reps: [n]i64) : *[]i64 =
   let offsets =
     map2 (-) (scan (+) 0 reps) reps
     |> map2 (\r o -> if r == 0 then -1 else o) reps
